@@ -1,5 +1,23 @@
 """
 Analysis Confusion Matrix and Detection Result
+
+      {% for lbl in lbls %}
+      <tr>
+          <td> {{lbl}} </td>
+          <td> {{data[0][lbl]['precision']}} </td>
+          <td> {{data[0][lbl]['recall']}} </td>
+          <td> {{data[1][lbl]['prec']}} </td>
+          <td> {{data[1][lbl]['recall']}} </td>
+          {% if data[1][lbl]['ret'] == 0 %}
+            <td> Achieved </td>
+          {% elif data[1][lbl]['ret'] == 1 %}
+            <td> Finetuned </td>
+          {% elif data[1][lbl]['ret'] == 2 %}
+            <td> Underperformed </td>
+          {% endif %}
+      </tr>
+      {% endfor %}
+      {{ data }}
 """
 
 from .common import comp_list

@@ -23,13 +23,12 @@ def load_mapping_file(filepath):
         :type filepath: str
         :return: (list of headers, dict of mapping)
     """
-    mapping_df = pd.read_csv(filepath)
-    headers = list(mapping_df)
 
+    print("label mapping: {}".format(filepath))
     mapping = pd.read_csv(filepath, index_col=0, squeeze=True).to_dict()
-    print(mapping)
+    # print(mapping)
 
-    return headers, mapping
+    return mapping
 
 def get_mapping_index(df, mapping, is_detection_system=True):
     """
@@ -85,11 +84,12 @@ class Reader:
             :param mapping: label mapping
         """
 
-        if mapping_file is not None:
-            exps, mapping = load_mapping_file(mapping_file)
+        if isinstance(mapping_file, str):
+            mapping = load_mapping_file(mapping_file)
+        elif isinstance(mapping_file, dict):
+            mapping = mapping_file
         else:
-            # use default mapping
-            pass
+            raise IOError("mapping file format error")
 
         df = pd.read_csv(fpath)
         zero_rows = [idx for idx, r in df.iterrows() if int(r[-1]) == 0]

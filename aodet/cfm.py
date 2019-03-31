@@ -58,6 +58,12 @@ class ConfusionMatrix(object):
         """return false negatives of a given class """
         return sum(self.cf_mat[name][p] for p in self.classes if p != name)
 
+    def fallout(self, name):
+        """ compute fallout
+        fallout =   fp/(fp+tn)
+        """
+        return float(self.fp(name))/(self.fp(name) + self.tn(name))
+
     def __len__(self):
         return len(self.classes)
 
@@ -86,7 +92,10 @@ class ConfusionMatrix(object):
         Parameters:
             :param name: class name
         """
-        pass
+        return (self.fallout(name), self.recall(name))
+
+    def pr_point(self, name):
+        return (self.recall(name), self.prec(name))
 
 
 
@@ -149,7 +158,11 @@ class DetectionConfusionMatrix(ConfusionMatrix):
         return sum([self.cf_mat[g][name] for g in self.classes]
                    + [self.nogt_spec[name]])
 
+    def concept_roc_point(self, name):
+        return self.roc_point(name)
 
+    def concept_pr_point(self, name):
+        return self.pr_point(name)
 
     def box_recall(self, name):
         """

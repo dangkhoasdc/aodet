@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from 'bootstrap/form.html' import render_form, render_field, render_form_row %}
+
+{% block content %}
+    <h1>Performance Analysis</h1>
+    <form method="post" enctype="multipart/form-data">
+        {{ form.csrf_token }}
+        {{ render_field(form.expid, form_type="horizontal") }}
+        {{ render_field(form.productside, form_type="horizontal") }}
+        {{ render_field(form.targets, form_type="horizontal") }}
+        {{ render_field(form.cfresults, form_type="horizontal") }}
+        {{ render_field(form.lblmapping, form_type="horizontal") }}
+        {{ render_field(form.submit) }}
+    </form>
+
+{% endblock %}

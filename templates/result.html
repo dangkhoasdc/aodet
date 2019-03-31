@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% from 'bootstrap/form.html' import render_form, render_field, render_form_row %}
+
+{% block content %}
+<style>
+caption {
+  text-align: left;
+  color: silver;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 5px;
+}
+
+thead {
+  background: SteelBlue;
+  color: white;
+}
+
+th,
+td {
+  padding: 5px 10px;
+}
+
+
+tbody tr td:nth-child(2) {
+  text-align:center;
+}
+
+tbody tr td:nth-child(10),
+tbody tr td:nth-child(10) {
+  text-align: right;
+  font-family: monospace;
+}
+
+tfoot {
+  background: SeaGreen;
+  color: white;
+  text-align: right;
+}
+
+tfoot tr th:last-child {
+  font-family: monospace;
+}
+</style>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<style>
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.dot {
+  stroke: #000;
+}
+
+.tooltip {
+  position: absolute;
+  width: 200px;
+  height: 28px;
+  pointer-events: none;
+}
+</style>
+<h1> Performance Analysis </h1>
+<div class="container ">
+<table class="table table-bordered table-hover">
+  <caption>Performance Result</caption>
+  <thead>
+    <tr>
+      <th rowspan=2>Class</th>
+      <th colspan=2>Targets</th>
+      <th colspan=2> Exp {{expid}}</th>
+      <th rowspan=2>Result</th>
+    </tr>
+    <tr>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>Precision</th>
+      <th>Recall</th>
+    </tr>
+  </thead>
+  <tbody>
+      {% for lbl in lbls %}
+
+        {% if data[1][lbl]['ret'] == 0 %}
+        <tr class="table-info">
+        {% elif data[1][lbl]['ret'] == 1 %}
+        <tr class="table-warning">
+        {% elif data[1][lbl]['ret'] == 2 %}
+        <tr class="table-danger">
+        {% endif %}
+
+          <td> {{lbl}} </td>
+
+          <td> {{ "{0:.3f}".format(data[0][lbl]['precision'])}} </td>
+          <td> {{"{0:.3f}".format(data[0][lbl]['recall'])}} </td>
+          <td> {{"{0:.3f}".format(data[1][lbl]['prec'])}} </td>
+          <td> {{"{0:.3f}".format(data[1][lbl]['recall'])}} </td>
+          {% if data[1][lbl]['ret'] == 0 %}
+            <td> Achieved </td>
+          {% elif data[1][lbl]['ret'] == 1 %}
+            <td> Finetuned </td>
+          {% elif data[1][lbl]['ret'] == 2 %}
+            <td> Underperformed </td>
+          {% endif %}
+      </tr>
+      {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h1> Summary </h1>
+
+From the experiment, we conclude:
+<ol>
+{% if achieved %}
+<li> Following categories achieved the target from product team: </li>
+    <ul>
+        {% for lbl in achieved %}
+        <li> {{ lbl }} </li>
+        {% endfor %}
+    </ul>
+{% else %}
+{% endif %}
+
+
+{% if finetunes %}
+<li> Some categories need to be updated the confident thresholds</li>
+    <ul>
+        {% for lbl in finetunes %}
+        <li> {{ lbl }} </li>
+        {% endfor %}
+    </ul>
+{% else %}
+{% endif %}
+
+{% if underperf %}
+<li> Unfortunately, we have some classes underperfed: </li>
+    <ul>
+        {% for lbl in underperf %}
+        <li> {{ lbl }} </li>
+        {% endfor %}
+    </ul>
+{% else %}
+<li> There is no class that underperforms our target. We can consider release
+    the model {{ 'after updating thresholds' if finetunes else '' }}.
+{% endif %}
+
+</ol>
+
+<h1> Precision-Recall Figure </h1>
+
+<div class="container" id="roc">
+</div>
+
+<script src="https://d3js.org/d3.v3.min.js"></script>
+
+<script>
+var data = {{ roc | safe  }};
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+/*
+ * value accessor - returns the value to encode for a given data object.
+ * scale - maps value to a visual display encoding, such as a pixel position.
+ * map function - maps from data value to display value
+ * axis - sets up axis
+ */
+
+// setup x
+var xValue = function(d) { return d[1];}, // data -> value
+    xScale = d3.scale.linear().range([0, width]), // value -> display
+    xMap = function(d) { return xScale(xValue(d));}, // data -> display
+    xAxis = d3.svg.axis().scale(xScale).orient("bottom");
+
+// setup y
+var yValue = function(d) { return d[2];}, // data -> value
+    yScale = d3.scale.linear().range([height, 0]), // value -> display
+    yMap = function(d) { return yScale(yValue(d));}, // data -> display
+    yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+// setup fill color
+var cValue = function(d) { return d[0];},
+    color = d3.scale.category20();
+
+// add the graph canvas to the body of the webpage
+var svg = d3.select("#roc").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+// add the tooltip area to the webpage
+var tooltip = d3.select("#roc").append("div")
+    .attr("class", "tooltip")
+    .style("opacity", 0);
+
+// load data
+//d3.csv("cereal.csv", function(error, data) {
+
+  // change string (from CSV) into number format
+//  data.forEach(function(d) {
+//    d.name = +d.Calories;
+//    d["Protein (g)"] = +d["Protein (g)"];
+//    console.log(d);
+ // });
+
+  // don't want dots overlapping axis, so add in buffer to data domain
+  //xScale.domain([d3.min(data, xValue)-1, d3.max(data, xValue)+1]);
+  //yScale.domain([d3.min(data, yValue)-1, d3.max(data, yValue)+1]);
+  xScale.domain([0, 1.0]);
+  yScale.domain([0, 1.0]);
+
+  // x-axis
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("x", width)
+      .attr("y", -6)
+      .style("text-anchor", "end")
+      .text("False positive rate");
+
+  // y-axis
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("True Positive Rate");
+
+  // draw dots
+  svg.selectAll(".dot")
+      .data(data)
+    .enter().append("circle")
+      .attr("class", "dot")
+      .attr("r", 3.5)
+      .attr("cx", xMap)
+      .attr("cy", yMap)
+      .style("fill", function(d) { return color(cValue(d));})
+      .on("mouseover", function(d) {
+          tooltip.transition()
+               .duration(200)
+               .style("opacity", .9);
+          tooltip.html(d[0] + "<br/> (" + xValue(d)
+	        + ", " + yValue(d) + ")")
+               .style("left", (d3.event.pageX + 5) + "px")
+               .style("top", (d3.event.pageY - 28) + "px");
+      })
+      .on("mouseout", function(d) {
+          tooltip.transition()
+               .duration(500)
+               .style("opacity", 0);
+
+      });
+
+  // draw legend
+  var legend = svg.selectAll(".legend")
+      .data(color.domain())
+    .enter().append("g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+  // draw legend colored rectangles
+  legend.append("rect")
+      .attr("x", 18)
+      .attr("width", 18)
+      .attr("height", 18)
+      .style("fill", color);
+
+  // draw legend text
+  legend.append("text")
+      .text(function(d) { return d;})
+      .attr("class", "legend")
+     .attr("x", 40)
+      .attr("y", 9)
+      .attr("dy", ".35em")
+//      .style("text-anchor", "end")
+// });
+
+</script>
+
+
+{% endblock %}
