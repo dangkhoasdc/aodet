@@ -2,6 +2,8 @@
 Confusion matrix
 """
 
+from .common import f1
+
 class ConfusionMatrix(object):
     """
 
@@ -78,7 +80,7 @@ class ConfusionMatrix(object):
         p = self.prec(name)
         r = self.recall(name)
 
-        return 2.0*(p*r)/(p+r)
+        return f1(p, r)
 
     def fbeta(self, name, beta):
         p = self.prec(name)
@@ -214,6 +216,9 @@ class DetectionConfusionMatrix(ConfusionMatrix):
             :param name: name of class
         """
         return self.prec(name)
+
+    def concept_f1(self, name):
+        return self.f1(name)
 
 
     def __str__(self):

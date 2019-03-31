@@ -1,38 +1,33 @@
 """
 Analysis Confusion Matrix and Detection Result
 
-      {% for lbl in lbls %}
-      <tr>
-          <td> {{lbl}} </td>
-          <td> {{data[0][lbl]['precision']}} </td>
-          <td> {{data[0][lbl]['recall']}} </td>
-          <td> {{data[1][lbl]['prec']}} </td>
-          <td> {{data[1][lbl]['recall']}} </td>
-          {% if data[1][lbl]['ret'] == 0 %}
-            <td> Achieved </td>
-          {% elif data[1][lbl]['ret'] == 1 %}
-            <td> Finetuned </td>
-          {% elif data[1][lbl]['ret'] == 2 %}
-            <td> Underperformed </td>
-          {% endif %}
-      </tr>
-      {% endfor %}
-      {{ data }}
 """
 
-from .common import comp_list
+from .common import comp_list, f1
+from collections import defaultdict
+
+# class Suggestion:
+#     HIGH_FALSE_POSITIVES = [
+#         'Missing ground truth',
+#         'Low threshold',
+#         'Model bias'
+#     ]
+
+
+#     LOW_RECALL = [
+#         'Difficult groundtruth',
+#         'Wrong annotations and guidelines',
+#     ]
 
 class Suggestion:
-    HIGH_FALSE_POSITIVES = [
-        'Missing ground truth',
-        'Low threshold',
-        'Model bias'
-    ]
+    MISSING_GROUND_TRUTH = 0
+    LOW_THRESHOLD = 1
+    MODEL_BIAS = 2
+    DIFFICULT_GROUNDTRUTH = 3
+    WRONG_ANNOTATION = 4
+    NORMAL = 5
+    CONFUSING_GROUNDTRUTH = 6
 
-    LOW_RECALL = [
-        'Difficult groundtruth',
-        'Wrong annotations and guidelines',
-    ]
 
 class ResultType:
     ACHIEVED = 0
@@ -48,6 +43,9 @@ class TargetAnalysis(object):
 
     def set_targets(self, targets):
         self.targets = targets
+        for lbl in self.targets.keys():
+            self.targets[lbl]['f1'] = f1(self.targets[lbl]['precision'],
+                                         self.targets[lbl]['recall'])
 
 
     def set_model_results(self, model_results):
@@ -73,6 +71,18 @@ class TargetAnalysis(object):
 
         return None
 
+
+    def get_f1_delta(self):
+        """
+        f1 delta between the target and result
+        """
+        def d(e,t):
+            if isinstance(e, str) or isinstance(t, str):
+                return 0
+            return (e-t)/t
+
+        return {lbl: d(self.model_results.concept_f1(lbl), self.targets[lbl]['f1'])
+               for lbl in self.model_results.get_classes()}
 
     def analyze(self):
         """
@@ -103,3 +113,34 @@ class TargetAnalysis(object):
                 self.report[cls] = ResultType.CONSIDERING
         self.called_analyze = True
         return self.report
+
+    def analyze_class(self):
+        report = self.analyze()
+        ret = defaultdict(list)
+
+        def thres(tg, v):
+            return (v - tg)/float(tg) < 0.10
+
+        for lbl, v in report.items():
+            if v != ResultType.UNDERPERFORMED:
+                ret[lbl].append(Suggestion.NORMAL)
+                continue
+
+            prec = self.model_results.concept_prec(lbl)
+            rec = self.model_results.concept_recall(lbl)
+            tgprec = self.targets[lbl]['precision']
+            tgrecall = self.targets[lbl]['recall']
+
+            if thres(tgrecall, rec):
+                ret[lbl].append(Suggestion.CONFUSING_GROUNDTRUTH)
+
+            if thres(tgprec, prec):
+                ret[lbl].append(Suggestion.MISSING_GROUND_TRUTH)
+
+            if prec > 0.5 and prec < tgprec - 0.05:
+                ret[lbl].append(Suggestion.MODEL_BIAS)
+
+            if rec > 0.5 and rec < tgrecall - 0.05:
+                ret[lbl].append(Suggestion.DIFFICULT_GROUNDTRUTH)
+
+        return ret

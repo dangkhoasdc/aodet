@@ -52,13 +52,18 @@ def index():
         prtable = get_prtable(targets, results, report)
         achieved, finetunes, underperform = get_statis(report)
         lbls = list(report.keys())
+        f1scores = detana.get_f1_delta()
+        suggestions = get_suggestion(detana)
         return render_template('result.html', data=prtable,
+                               productteam=perf_setup_form.productside.data,
                                roc=prtable[2],
                                achieved=achieved,
                                finetunes=finetunes,
                                underperf=underperform,
                                lbls=lbls,
-                               expid=perf_setup_form.expid.data)
+                               expid=perf_setup_form.expid.data,
+                               f1scores=f1scores,
+                               suggestions=suggestions)
         #pr table
 
     return render_template('index.html', form=perf_setup_form)
@@ -91,6 +96,20 @@ def get_prtable(targets, results, detana):
                                     results.concept_pr_point(lbl))))
 
     return [targets, cfm, roc]
+
+
+def get_suggestion(anadet):
+    ret = anadet.analyze_class()
+    retsug = dict()
+    print(ret)
+    for lbl, v in ret.items():
+        if ana.Suggestion.NORMAL in v:
+            continue
+
+        retsug[lbl] = v
+    print("retsug {}".format(retsug))
+    return retsug
+
     # return json.dumps([targets, cfm])
 # jsonify(targets=targets, cfm=cfm)
 

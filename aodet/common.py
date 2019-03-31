@@ -86,3 +86,9 @@ def default_zeros(shape, dtype=float, order='C'):
 
 def comp_list(l1, l2):
     return len(l1) == len(l2) and len(set(l1).intersection(l2)) == len(l1)
+
+
+def f1(p, r):
+    if p == 0.0 and r ==0.0:
+        return 'NaN'
+    return 2.0*(p*r)/(p+r)
