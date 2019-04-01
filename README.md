@@ -27,8 +27,10 @@ AoDet
  - [ ] Compare models. 
  - [ ] Precision-Recall curve analysis. 
  - [ ] Debug wrong predictions. 
+ - [ ] Dtection data-coverage analysis procedure.
+ - [ ] Network visualization.
 
 # Logs
  * 30/03/19: Init, design API and implement it. 
  * 31/03/19: Implement demo.
- * 01/04/19: Support concept false positive 
+ * 01/04/19: Support concept false positive/ Update demo.
