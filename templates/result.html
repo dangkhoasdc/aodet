@@ -64,9 +64,71 @@ tfoot tr th:last-child {
   height: 28px;
   pointer-events: none;
 }
+
+	.pembatas{
+		    display: block;
+    height: auto;
+    overflow: hidden;
+    box-sizing: border-box;
+    margin: 0 5px 20px;
+    background: transparent;
+	}
+	.pembatas ul{
+		position: relative;
+		width: 450px;
+		margin-left: 20px;
+		padding: 10px;
+		box-sizing: border-box;
+		padding-bottom: 20px;
+		margin-bottom: 20px;
+	}
+	.pembatas ul li {
+		display: flex;
+		background: rgba(0,0,255,.1);
+		padding: 10px 20px;
+		color: #000;
+		margin: 5px 0;
+		transition: .5s;
+	}
+	.pembatas ul li:nth-child(1){
+		background: rgba(125,125,125,.55);
+	}
+	.pembatas ul li:nth-child(2){
+		background: rgba(125,125,125,.5);
+	}
+	.pembatas ul li:nth-child(3){
+		background: rgba(125,125,125,.4);
+	}
+	.pembatas ul li:nth-child(4){
+		background: rgba(125,125,125,.3);
+	}
+	.pembatas ul li:nth-child(5){
+		background: rgba(125,125,125,.2);
+	}
+	.pembatas ul li span:nth-child(1){
+		width: 30px;
+	}
+	.pembatas ul li span:nth-child(2){
+		width: 200px;
+	}
+	.pembatas ul li span:nth-child(3){
+		width: 100px;
+		text-align: right;
+	}
+	.pembatas ul li span:nth-child(4){
+		width: 70px;
+		text-align: right;
+	}
+	.pembatas ul li:hover{
+		transform: scale(1.06);
+		background: #2196F3;
+	}
+	.pembatas ul li a{
+		color: blue;
+	}
 </style>
 <br/>
-<h1> Performance Analysis </h1>
+<h1> Performance Analysis of Exp #{{expid}} </h1>
 <div class="container ">
 <table class="table table-bordered table-hover">
   <caption>Performance Result</caption>
@@ -227,7 +289,7 @@ var tooltip = d3.select("#roc").append("div")
       .attr("x", width)
       .attr("y", -6)
       .style("text-anchor", "end")
-      .text("False positive rate");
+      .text("Recall");
 
   // y-axis
   svg.append("g")
@@ -239,14 +301,14 @@ var tooltip = d3.select("#roc").append("div")
       .attr("y", 6)
       .attr("dy", ".71em")
       .style("text-anchor", "end")
-      .text("True Positive Rate");
+      .text("Precision");
 
   // draw dots
   svg.selectAll(".dot")
       .data(data)
     .enter().append("circle")
       .attr("class", "dot")
-      .attr("r", 3.5)
+      .attr("r", 5)
       .attr("cx", xMap)
       .attr("cy", yMap)
       .style("fill", function(d) { return color(cValue(d));})
@@ -302,17 +364,32 @@ var tooltip = d3.select("#roc").append("div")
     {% for v in suggestions[lbl] %}
         {% if v == 6%}
         <li> The annotations may confusing, hence the model wrongly returns as
-        another classes.</li>
+        another classes.
+<div class="pembatas">
+	<ul>
+        {% for lbl2, ratio in cfscls[lbl].items() %}
+		<li>
+			<span class="num"></span>
+            <span class="name"><b>{{lbl2}}</b></span>
+            <span class="points">{{"{0:.3%}".format(ratio)}}</span>
+			<span class="bage">[<a target="_blank"
+                         href="http://evaluation-internal.visenze.com/v2/detection/experiments/{{expid}}/detail?iou=0.5&gt={{lbl}}&pred={{lbl2}}">View</a>]</span>
+		</li>
+        {% endfor %}
+	</ul>
+	</div>
+        </li>
+
         {% elif v == 0 %}
         <li> Maybe somg missing groundtruth while annotating (Please check:
-            <a
+            <a target="_blank"
                 href="http://evaluation-internal.visenze.com/v2/detection/experiments/{{expid}}/detail?iou=0.5&gt=*NO_MATCH*&pred={{lbl}}">Link</a>
             ).</li>
         {% elif v == 2 %}
         <li> Model bias </li>
         {% elif v == 3 %}
             <li> Maybe the groundtruths are so difficult that the model can not
-                detect. OR, YOU CAN ASK {{productteam}}:
+                detect. OR, YOU CAN ASK <b> {{productteam}} </b>:
                 <blockquote class="blockquote"> "Life is hard. Why do you make
                     it harder?"</blockquote>
             </li>

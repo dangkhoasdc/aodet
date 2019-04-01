@@ -114,6 +114,23 @@ class TargetAnalysis(object):
         self.called_analyze = True
         return self.report
 
+
+    def get_confusing_labels(self, lbl):
+        """
+        return labels that wrongly predicted as `lbl`. Also return its ratio.
+        """
+        ret = dict()
+        for lbl2 in self.model_results.get_classes():
+            if lbl2 == lbl:
+                continue
+
+            wrong_ratio = float(self.model_results.get(lbl, lbl2))/self.model_results.ngts(lbl)
+            if wrong_ratio >= 0.01:
+                ret[lbl2] = wrong_ratio
+
+        return ret
+
+
     def analyze_class(self):
         report = self.analyze()
         ret = defaultdict(list)
@@ -132,7 +149,9 @@ class TargetAnalysis(object):
             tgrecall = self.targets[lbl]['recall']
 
             if thres(tgrecall, rec):
-                ret[lbl].append(Suggestion.CONFUSING_GROUNDTRUTH)
+                wrong_ratios = self.get_confusing_labels(lbl)
+                if len(wrong_ratios) > 0:
+                    ret[lbl].append(Suggestion.CONFUSING_GROUNDTRUTH)
 
             if thres(tgprec, prec):
                 ret[lbl].append(Suggestion.MISSING_GROUND_TRUTH)

@@ -6,6 +6,16 @@ from .common import f1
 
 class ConfusionMatrix(object):
     """
+    General Confusion Matrix.
+    Views:
+        - Row: Groundtruths.
+        - Column: Predictions.
+    For the sake of simplicity, we regard this Confusion Matrix as "Concept
+    Confusion Matrix". Later, when we introduct Detection Confusion Matrix, we
+    have another type of matrix: Box Confusion Matrix. Since Box confusion
+    matrix only occurs in the box detectio problem, I want to separate it
+    and only use this one for general purposes.
+
 
     """
     def __init__(self, classes):
@@ -29,6 +39,14 @@ class ConfusionMatrix(object):
 
 
     def get(self, gtc, prdc):
+        """
+        Return value of a cell in the matrix
+        Parameters:
+            :param gtc: ground-truth class name.
+            :param prdc: prediction class name.
+        """
+        assert gtc in self.classes and prdc in self.classes, \
+            "parameter is not in the class names"
         return self.cf_mat[gtc][prdc]
 
     def total(self):

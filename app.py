@@ -53,7 +53,8 @@ def index():
         achieved, finetunes, underperform = get_statis(report)
         lbls = list(report.keys())
         f1scores = detana.get_f1_delta()
-        suggestions = get_suggestion(detana)
+        suggestions, cfscls = get_suggestion(detana)
+        print("confusing labels {}".format(cfscls))
         return render_template('result.html', data=prtable,
                                productteam=perf_setup_form.productside.data,
                                roc=prtable[2],
@@ -63,7 +64,8 @@ def index():
                                lbls=lbls,
                                expid=perf_setup_form.expid.data,
                                f1scores=f1scores,
-                               suggestions=suggestions)
+                               suggestions=suggestions,
+                               cfscls=cfscls)
         #pr table
 
     return render_template('index.html', form=perf_setup_form)
@@ -100,15 +102,17 @@ def get_prtable(targets, results, detana):
 
 def get_suggestion(anadet):
     ret = anadet.analyze_class()
+    confusing_cls = dict()
     retsug = dict()
     print(ret)
     for lbl, v in ret.items():
         if ana.Suggestion.NORMAL in v:
             continue
+        if ana.Suggestion.CONFUSING_GROUNDTRUTH in v:
+            confusing_cls[lbl] = anadet.get_confusing_labels(lbl)
 
         retsug[lbl] = v
-    print("retsug {}".format(retsug))
-    return retsug
+    return retsug, confusing_cls
 
     # return json.dumps([targets, cfm])
 # jsonify(targets=targets, cfm=cfm)
