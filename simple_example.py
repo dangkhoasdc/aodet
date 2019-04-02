@@ -20,40 +20,37 @@ def parse_args():
     return parser.parse_args()
 
 
-def read_target_csv(fpath):
-    """
-    read target csv file, inlcude:
-             ,recall,precision
-        label, ..., ....
-    """
-    df = pd.read_csv(fpath, index_col=0)
-    return df.to_dict('index')
-
 def main():
     args = parse_args()
-    targets = read_target_csv(args.target)
+    targets = pd.read_csv(args.target, index_col=0).to_dict('index')
     results = aio.Reader.from_detection_sys(args.input, args.mapping)
 
-    print(results)
     print("Recall")
     for cls in results.get_classes():
         print("{}: {}".format(cls ,results.concept_recall(cls)))
+        
+        
     print("Precision")
     for cls in results.get_classes():
         print("{}: {}".format(cls ,results.concept_prec(cls)))
 
     detection_analysis = ana.TargetAnalysis(targets, results)
     report = detection_analysis.analyze()
+    
     print("Classes achieved target: ")
     for lbl in results.get_classes():
         if report[lbl] == ana.ResultType.ACHIEVED:
             print(lbl)
     print("===========================")
+    
+    
     print("Classes underperforms : ")
     for lbl in results.get_classes():
         if report[lbl] == ana.ResultType.UNDERPERFORMED:
             print(lbl)
     print("===========================")
+    
+    
     print("Classes have precision/recall unbalanced")
     for lbl in results.get_classes():
         if report[lbl] == ana.ResultType.CONSIDERING:
