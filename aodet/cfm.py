@@ -34,6 +34,7 @@ class ConfusionMatrix(object):
         assert gtc in self.classes and prdc in self.classes
         self.cf_mat[gtc][prdc] = v
 
+
     def get_classes(self):
         return self.classes
 
@@ -54,68 +55,68 @@ class ConfusionMatrix(object):
         return sum([sum(self.cf_mat[g][p] for p in self.classes)
                    for g in self.classes])
 
-    def ret(self, name):
+    def ret(self, cls):
         """ return total returns of a class  """
-        return sum([self.cf_mat[g][name] for g in self.classes])
+        return sum([self.cf_mat[g][cls] for g in self.classes])
 
-    def ngts(self, name):
+    def ngts(self, cls):
         """ return total groundtruths """
-        return sum(self.cf_mat[name].values())
+        return sum(self.cf_mat[cls].values())
 
-    def tp(self, name):
+    def tp(self, cls):
         """return true positves of a given class """
-        return self.cf_mat[name][name]
+        return self.cf_mat[cls][cls]
 
-    def tn(self, name):
+    def tn(self, cls):
         """return true negatives of a given class """
-        return self.total() - self.tp(name) - self.fp(name) - self.fn(name)
+        return self.total() - self.tp(cls) - self.fp(cls) - self.fn(cls)
 
-    def fp(self, name):
+    def fp(self, cls):
         """return false positives of a given class """
-        return sum(self.cf_mat[g][name] for g in self.classes if g != name)
+        return sum(self.cf_mat[g][cls] for g in self.classes if g != cls)
 
-    def fn(self, name):
+    def fn(self, cls):
         """return false negatives of a given class """
-        return sum(self.cf_mat[name][p] for p in self.classes if p != name)
+        return sum(self.cf_mat[cls][p] for p in self.classes if p != cls)
 
-    def fallout(self, name):
+    def fallout(self, cls):
         """ compute fallout
         fallout =   fp/(fp+tn)
         """
-        return float(self.fp(name))/(self.fp(name) + self.tn(name))
+        return float(self.fp(cls))/(self.fp(cls) + self.tn(cls))
 
     def __len__(self):
         return len(self.classes)
 
-    def prec(self, name):
-        return float(self.tp(name))/self.ret(name)
+    def prec(self, cls):
+        return float(self.tp(cls))/self.ret(cls)
 
 
-    def recall(self, name):
-        return float(self.tp(name))/self.ngts(name)
+    def recall(self, cls):
+        return float(self.tp(cls))/self.ngts(cls)
 
-    def f1(self, name):
-        p = self.prec(name)
-        r = self.recall(name)
+    def f1(self, cls):
+        p = self.prec(cls)
+        r = self.recall(cls)
 
         return f1(p, r)
 
-    def fbeta(self, name, beta):
-        p = self.prec(name)
-        r = self.recall(name)
+    def fbeta(self, cls, beta):
+        p = self.prec(cls)
+        r = self.recall(cls)
 
         return (1 + beta**2.0) * p * r/ ((beta**2 * p) + r)
 
-    def roc_point(self, name):
+    def roc_point(self, cls):
         """
         compute ROC point to plot the graph
         Parameters:
-            :param name: class name
+            :param cls: class cls
         """
-        return (self.fallout(name), self.recall(name))
+        return (self.fallout(cls), self.recall(cls))
 
-    def pr_point(self, name):
-        return (self.recall(name), self.prec(name))
+    def pr_point(self, cls):
+        return (self.recall(cls), self.prec(cls))
 
 
 
@@ -173,22 +174,17 @@ class DetectionConfusionMatrix(ConfusionMatrix):
                    + list(self.duplicates.values())
                    + list(self.nogt_spec.values()))
 
-    def ret(self, name):
+    def ret(self, cls):
         """ return total returns of a class  """
-        return sum([self.cf_mat[g][name] for g in self.classes]
-                   + [self.nogt_spec[name]])
+        return sum([self.cf_mat[g][cls] for g in self.classes]
+                   + [self.nogt_spec[cls]])
 
-    def concept_roc_point(self, name):
-        return self.roc_point(name)
+    def concept_roc_point(self, cls):
+        return self.roc_point(cls)
 
-    def concept_pr_point(self, name):
-        return self.pr_point(name)
+    def concept_pr_point(self, cls):
+        return self.pr_point(cls)
 
-    def box_recall(self, name):
-        """
-        compute box recall
-        """
-        pass
 
     def set_nomatch(self, cls, v):
         """
@@ -217,26 +213,60 @@ class DetectionConfusionMatrix(ConfusionMatrix):
         return self.duplicates[cls]
 
 
-    def box_prec(self, name):
-        pass
 
-    def concept_recall(self, name):
+    # box metrics
+
+    def box_tp_prd(self, cls):
+        """
+        return number of boxes that return as `cls` regardless the label.
+        Basically, it is the sum of the column `cls` in the original confusion
+        matrix
+        """
+        return sum(self.cf_mat[l][cls] for l in self.get_classes())
+
+    def box_tp_gt(self, cls):
+        """
+        box true positive of groundtruth is sum of all boxes detected regardless the
+        class output. In other words, we only consider if the box is detected
+
+        """
+        return sum(list(self.cf_mat[cls].values()))
+
+    def box_recall(self, cls):
+        """
+        box recall is:
+            box_tp_gt/ngts
+        """
+        return float(self.box_tp_gt(cls))/self.ngts(cls)
+
+    def num_detected(self, cls):
+        return self.box_tp_pred(cls) + self.nogt_spec[cls]
+
+    def box_prec(self, cls):
+        """
+        box precision:
+            box_tp_pred/num_detected
+        """
+        return float(self.box_tp_pred(cls))/self.num_detected(cls)
+
+    # concept matrics
+    def concept_recall(self, cls):
         """ the concept recall actually is the *true recall *
         Parameters:
-            :param name: name of class
+            :param cls: cls of class
         """
-        return self.recall(name)
+        return self.recall(cls)
 
 
-    def concept_prec(self, name):
+    def concept_prec(self, cls):
         """ the concept precision actually is the *true precision *
         Parameters:
-            :param name: name of class
+            :param cls: cls of class
         """
-        return self.prec(name)
+        return self.prec(cls)
 
-    def concept_f1(self, name):
-        return self.f1(name)
+    def concept_f1(self, cls):
+        return self.f1(cls)
 
 
     def __str__(self):

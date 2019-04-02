@@ -92,3 +92,21 @@ def f1(p, r):
     if p == 0.0 and r ==0.0:
         return 'NaN'
     return 2.0*(p*r)/(p+r)
+
+
+def rel_delta(ref, x):
+    assert ref >= 0.0 and x >= 0.0
+    return float(x-ref)/ref
+
+def rel_diff(ref, x, func="max"):
+    comps = {
+        'max': lambda x, y: max(x, y),
+        'min': lambda x, y: min(x, y),
+        'abs_max': lambda x, y: min(abs(x), abs(y)),
+        'abs_min': lambda x, y: min(abs(x), abs(y)),
+        'mean': lambda x, y: (x+y)/2.0,
+        'abs_mean': lambda x, y: (abs(x)+abs(y))/2.0
+    }
+
+    return abs(float(x-ref)/comps[func])
+
