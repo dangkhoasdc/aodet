@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from 'bootstrap/form.html' import render_form, render_field, render_form_row %}
+
+
+{% block content %}
+    <h1>Octave Output Visualization</h1>
+    <form method="post" enctype="multipart/form-data">
+        {{ form.csrf_token }}
+        {{ render_field(form.image, form_type="horizontal") }}
+        {{ render_field(form.submit) }}
+    </form>
+
+{%if img_url%}
+<img src="{{url_for('static', filename='tmp/'+img_url)}}">
+{%endif%}
+{% endblock %}

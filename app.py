@@ -2,12 +2,21 @@
 """
 
 """
+# std
+import os
+import json
+import os.path as osp
+import subprocess
+
+# flask
 from flask import Flask, render_template, request
 from flask.json import jsonify
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, FileField
+from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired, Length
+from flask_uploads import UploadSet, configure_uploads, IMAGES, patch_request_class
+from flask_wtf.file import FileField, FileRequired, FileAllowed
 
 from flask_bootstrap import Bootstrap
 import pandas as pd
@@ -18,12 +27,20 @@ import pandas as pd
 # aodet
 import aodet.analysis as ana
 import aodet.io as aio
-import json
+
+# utils
+import paramiko
 
 app = Flask(__name__)
 app.secret_key = 'dev'
+imdir = osp.join(os.getcwd(), "static", "tmp")
+app.config['UPLOADED_PHOTOS_DEST'] = imdir
 
 bootstrap = Bootstrap(app)
+photos = UploadSet('photos', IMAGES)
+configure_uploads(app, photos)
+patch_request_class(app)
+cwd = os.getcwd()
 
 
 class PerformanceForm(FlaskForm):
@@ -32,6 +49,12 @@ class PerformanceForm(FlaskForm):
     lblmapping = FileField('Label Mapping File')
     targets = FileField('Targets File')
     cfresults = FileField('Confusion Matrix Result')
+    submit = SubmitField()
+
+
+class OctaveDebugForm(FlaskForm):
+    image = FileField(validators=[FileAllowed(photos, 'Image Only'),
+                                  FileRequired('File was empty')])
     submit = SubmitField()
 
 @app.route('/index', methods=['GET', 'POST'])
@@ -125,9 +148,42 @@ def perf():
 def comp():
     return render_template('index.html')
 
-@app.route('/localperf', methods=['GET', 'POST'])
-def localperf():
-    return render_template('index.html')
+
+def ssh_run_cmd(cmd):
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.WarningPolicy)
+    client.connect('hydra2.visenze.com', username='khoa', password='KimTho1612')
+    stdin, stdout, stderr = client.exec_command(cmd)
+    client.close()
+
+
+
+@app.route('/localeval', methods=['GET', 'POST'])
+def localeval():
+    form = OctaveDebugForm()
+    if form.validate_on_submit():
+        imname = photos.save(form.image.data)
+        imfullpath = osp.join(imdir, imname)
+        subprocess.run(['scp', ])
+        # setup ssh
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.WarningPolicy)
+        client.connect('hydra2.visenze.com', username='khoa', password='KimTho1612')
+        sftp = client.open_sftp()
+        sftp.put(imfullpath, '/mnt/ssd_01/khoa/python_scripts/detectron_tools/{}'.format(imname))
+        sftp.close()
+        client.close()
+
+        # run the demo on server
+        ssh_run_cmd('''cd /mnt/ssd_01/khoa/python_scripts/
+                    /mnt/ssd_01/khoa/python_scripts/detectron_tools/
+
+                    python debug_output_blobs.py -M model_final/ -I a.jpg
+                    ''')
+        # return render_template('local_eval.html', form=form, img_url=impath)
+    return render_template('local_eval.html', form=form)
 
 # @app.route('/form', methods=['GET', 'POST'])
 # def test_form():
