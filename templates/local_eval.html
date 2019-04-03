@@ -38,7 +38,7 @@
 .gallery-title
 {
     font-size: 36px;
-    color: #42B32F;
+    color: #3399EE;
     text-align: center;
     font-weight: 500;
     margin-bottom: 70px;
@@ -57,7 +57,7 @@
     border: 1px solid #42B32F;
     border-radius: 5px;
     text-align: center;
-    color: #42B32F;
+    color: #3399FF;
     margin-bottom: 30px;
 
 }
@@ -89,7 +89,10 @@
 </style>
 <div class="spinner-loading" style="display: none;">
     <div class="spinner"></div>
-    <div id="showtext"></div>
+    <blockquote class="blockquote text-center">
+    <p class="mb-0" id="showtext" align="center"></p>
+    <footer class="blockquote-footer">Khoa</footer>
+    </blockquote>
 </div>
 
 
@@ -107,6 +110,13 @@
         <div class="row">
         <div class="gallery col-lg-12">
         <h1 class="gallery-title">Octave Visualization</h1>
+        <p>Legend:</p>
+        <ul>
+            <li> <font color="red"> Red </font>: score &lt; 0.25 </li>
+            <li> <font color="#FFFF00">Yellow</font>: 0.25 &lt; score &lt; 0.5 </li>
+            <li> <font color="green">Green</font>: 0.25 &lt; score &lt; 0.75 </li>
+            <li> <font color="blue">Blue</font>: score &gt; 0.75 </li>
+        </ul>
 
         <div align="center">
             <button class="btn btn-default filter-button" data-filter="all">All</button>
