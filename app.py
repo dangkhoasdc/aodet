@@ -8,7 +8,7 @@ The real reason: I am too lazy to organize the code.
 import os
 import json
 import os.path as osp
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, list2cmdline
 import glob
 
 # flask
@@ -51,7 +51,11 @@ patch_request_class(app)
 # USE FOR DEMO
 
 MODEL_PATH = "/mnt/ssd_01/khoa/furniture_detection/jobdir/midlevel_v3.6/resnet50_retinanet_AR5_scale3/detectron_resnet_50_s500_lr0.0075_multistep_8_10/deploy/model_final/"
+REPORT_DIR = "/mnt/ssd_01/khoa/reports/"
 
+#########################################################
+# FORM Handlers
+#########################################################
 
 class PerformanceForm(FlaskForm):
     expid = StringField('Experiment ID', validators=[DataRequired(), Length(1, 20)])
@@ -66,11 +70,23 @@ class OctaveDebugForm(FlaskForm):
     model_path = StringField('Model Path', default=MODEL_PATH)
     image = FileField(validators=[FileAllowed(photos, 'Image Only'),
                                   FileRequired('File was empty')])
-    submit = SubmitField()
+    submit_oct = SubmitField("Run Octave Debug")
+
+
+class TSNEForm(FlaskForm):
+    dataset = StringField('Dataset name')
+    categories = StringField('Category (All if empty)')
+    submit_tsne = SubmitField("Run T-SNE")
+
+#########################################################
+# ROUTE Handlers
+#########################################################
+
 
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     perf_setup_form = PerformanceForm()
+
     if perf_setup_form.validate_on_submit():
         print("Product team: {}".format(perf_setup_form.productside.data))
         targets = pd.read_csv(request.files.get('targets'), index_col=0).to_dict('index')
@@ -105,12 +121,127 @@ def index():
     return render_template('index.html', form=perf_setup_form)
 
 
+@app.route('/comp', methods=['GET', 'POST'])
+def comp():
+    return render_template('index.html')
+
+@app.route('/localeval', methods=['GET', 'POST'])
+def localeval():
+    octform = OctaveDebugForm()
+    tsne_form = TSNEForm()
+    if tsne_form.submit_tsne.data and tsne_form.validate():
+        dsname = tsne_form.dataset.data
+        cats = list(map(lambda s: s.strip(), tsne_form.categories.data.split(",")))
+        html_viz = run_tsne_viz(dsname, cats)
+        html_viz = "http://hydra2.visenze.com:4567/{}".format(osp.basename(html_viz))
+        return render_template('local_eval.html', form=octform,
+                               tsneform=tsne_form,
+                               tsne_viz=html_viz)
+
+    if octform.submit_oct.data and octform.validate():
+
+        # I am lazy
+        # for f in glob.glob("{}/*".format(vizdir)):
+        #     print("removing {}".format(f))
+        #     os.remove(f)
+
+        imname = photos.save(octform.image.data)
+        baseimname = osp.splitext(osp.basename(imname))[0]
+        modelpath = octform.model_path.data
+        imfullpath = osp.join(imdir, imname)
+        imvizdir = osp.join(vizdir, baseimname)
+        os.mkdir(imvizdir)
+
+        process = Popen(["python",
+                         "/mnt/ssd_01/khoa/python_scripts/detectron_tools/debug_output_blobs.py",
+                         "-I", str(imfullpath),
+                         "-M", str(modelpath),
+                         "-O", str(imvizdir)],
+                        stdout=PIPE)
+        (output, err) = process.communicate()
+        print(output)
+        exit_code = process.wait()
+
+        # done, show the result
+        vizfiles = [f for f in os.listdir(imvizdir) \
+                    if osp.isfile(osp.join(imvizdir, f))]
+
+        vizfiles = get_viz_files(vizfiles, baseimname)
+        print(vizfiles)
+        fpn_filters = sorted(list(set([f['fpn'] for f in vizfiles])))
+
+
+        return render_template('local_eval.html', form=octform,
+                               vdir=baseimname,
+                               vizs=vizfiles,
+                               fpn_filters=fpn_filters,
+                               tsneform=tsne_form)
+    return render_template('local_eval.html', form=octform, tsneform=tsne_form, vizs=None)
+
+#########################################################
+# Backend stuff
+#########################################################
+
+def run_command(cmds):
+    """
+    Run an external program and wait to get the result
+    Parameters:
+        :param cmds: list of arguments of the command
+        :return: tuple of (output string, exit code, err message)
+    """
+    print("command: {}".format(list2cmdline(cmds)))
+    process = Popen(cmds, stdout=PIPE)
+    (output, err) = process.communicate()
+    print(output)
+    exit_code = process.wait()
+    return output, exit_code, err
+
+def run_tsne_viz(dsname, cats):
+    """
+    run the script which generates the T-SNE for a detection dataset,
+    return the content of HTML page
+    Parameters:
+        :param dataset_name: (str) dataset name
+        :param cats: (list) categories
+    """
+    report_fpath = "{}_{}".format(dsname, "_".join(sorted(cats)))
+    report_fullpath = osp.join(REPORT_DIR, report_fpath+".html")
+    print("cats = {}".format(cats))
+    if not osp.exists(report_fullpath) :
+        run_command([
+            "python",
+            "/mnt/ssd_01/khoa/python_scripts/detection_tsne.py",
+            "-I", dsname,
+            "-R", report_fpath,
+            "-D", "/mnt/ssd_01/khoa/furniture_detection/data",
+            "-C"
+        ]+list(map(str, cats)))
+
+    return report_fullpath
+
+def get_viz_files(vizfiles, baseimname):
+    """
+    return following list:
+        'imname': imname,
+        'fpn': fpn name,
+        'cls': predicted class
+    """
+    ret = list()
+    ll = len(baseimname)
+    for fname in vizfiles:
+        code = fname[ll+1:].split("_", 1)
+        ret.append({'imname': fname,
+                   'fpn': code[0],
+                   'cls': code[1].split(".")[0]})
+
+    return ret
+
+
 def get_statis(report):
     achieved = [lbl for lbl in report.keys() if report[lbl] == ana.ResultType.ACHIEVED]
     finetunes = [lbl for lbl in report.keys() if report[lbl] == ana.ResultType.CONSIDERING]
     underperform = [lbl for lbl in report.keys() if report[lbl] == ana.ResultType.UNDERPERFORMED]
     return achieved, finetunes, underperform
-
 
 
 def get_prtable(targets, results, detana):
@@ -150,74 +281,6 @@ def get_suggestion(anadet):
 
     # return json.dumps([targets, cfm])
 # jsonify(targets=targets, cfm=cfm)
-
-@app.route('/perf', methods=['GET', 'POST'])
-def perf():
-    return render_template('index.html')
-
-@app.route('/comp', methods=['GET', 'POST'])
-def comp():
-    return render_template('index.html')
-
-@app.route('/localeval', methods=['GET', 'POST'])
-def localeval():
-    octform = OctaveDebugForm()
-    if octform.validate_on_submit():
-
-        # I am lazy
-        # for f in glob.glob("{}/*".format(vizdir)):
-        #     print("removing {}".format(f))
-        #     os.remove(f)
-
-        imname = photos.save(octform.image.data)
-        baseimname = osp.splitext(osp.basename(imname))[0]
-        modelpath = octform.model_path.data
-        imfullpath = osp.join(imdir, imname)
-        imvizdir = osp.join(vizdir, baseimname)
-        os.mkdir(imvizdir)
-
-        process = Popen(["python",
-                         "/mnt/ssd_01/khoa/python_scripts/detectron_tools/debug_output_blobs.py",
-                         "-I", str(imfullpath),
-                         "-M", str(modelpath),
-                         "-O", str(imvizdir)],
-                        stdout=PIPE)
-        (output, err) = process.communicate()
-        print(output)
-        exit_code = process.wait()
-
-        # done, show the result
-        vizfiles = [f for f in os.listdir(imvizdir) \
-                    if osp.isfile(osp.join(imvizdir, f))]
-
-        vizfiles = get_viz_files(vizfiles, baseimname)
-        print(vizfiles)
-        fpn_filters = sorted(list(set([f['fpn'] for f in vizfiles])))
-
-
-        return render_template('local_eval.html', form=octform,
-                               vdir=baseimname,
-                               vizs=vizfiles,
-                               fpn_filters=fpn_filters)
-    return render_template('local_eval.html', form=octform, vizs=None)
-
-def get_viz_files(vizfiles, baseimname):
-    """
-    return following list:
-        'imname': imname,
-        'fpn': fpn name,
-        'cls': predicted class
-    """
-    ret = list()
-    ll = len(baseimname)
-    for fname in vizfiles:
-        code = fname[ll+1:].split("_", 1)
-        ret.append({'imname': fname,
-                   'fpn': code[0],
-                   'cls': code[1].split(".")[0]})
-
-    return ret
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port='3456')

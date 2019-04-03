@@ -96,14 +96,28 @@
 </div>
 
 
-<div id="content">
+<div id="tsne-content">
+<h1>T-SNE Visualization </h1>
+    <form method="post" enctype="multipart/form-data">
+        {{ tsneform.csrf_token }}
+        {{ render_field(tsneform.dataset, form_type="horizontal") }}
+        {{ render_field(tsneform.categories, form_type="horizontal") }}
+        {{ render_field(tsneform.submit_tsne, onclick="loading();") }}
+    </form>
+
+    {% if tsne_viz %}
+    Result: <a target="_blank" href="{{tsne_viz}}"> Visualization Link </a>
+    {% endif %}
+</div>
+
 <h1>Octave Output Visualization</h1>
     <form method="post" enctype="multipart/form-data">
         {{ form.csrf_token }}
         {{ render_field(form.model_path, form_type="horizontal") }}
         {{ render_field(form.image, form_type="horizontal") }}
-        {{ render_field(form.submit, onclick="loading();") }}
+        {{ render_field(form.submit_oct, onclick="loading();") }}
     </form>
+
 
 {% if vizs %}
 <div class="container">
@@ -141,7 +155,6 @@
         {% endfor %}
 
         </div>
-</div>
 </div>
 {% endif %}
 
@@ -181,6 +194,7 @@ $(this).addClass("active");
 var textarray = [
  "Ask Guangda for more GPUs if you feel it is too long",
  "Go buy yourself a cup of milktea",
+ "People say nothing is impossible, but I do nothing everyday",
  "Ask Jiaming why life is so hard"    // No comma after last entry
 ];
 
