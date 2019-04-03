@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
+Monolithic design, you know me.
 
+The real reason: I am too lazy to organize the code.
 """
 # std
 import os
 import json
 import os.path as osp
-import subprocess
+from subprocess import Popen, PIPE
+import glob
 
 # flask
 from flask import Flask, render_template, request
@@ -33,14 +36,21 @@ import paramiko
 
 app = Flask(__name__)
 app.secret_key = 'dev'
-imdir = osp.join(os.getcwd(), "static", "tmp")
+# PATH INFO
+cwd = os.getcwd()
+imdir = osp.join(cwd, "static", "tmp")
+vizdir = osp.join(cwd, "static", "viz")
 app.config['UPLOADED_PHOTOS_DEST'] = imdir
 
 bootstrap = Bootstrap(app)
 photos = UploadSet('photos', IMAGES)
 configure_uploads(app, photos)
 patch_request_class(app)
-cwd = os.getcwd()
+
+# DEFAULT PARAMS
+# USE FOR DEMO
+
+MODEL_PATH = "/mnt/ssd_01/khoa/furniture_detection/jobdir/midlevel_v3.6/resnet50_retinanet_AR5_scale3/detectron_resnet_50_s500_lr0.0075_multistep_8_10/deploy/model_final/"
 
 
 class PerformanceForm(FlaskForm):
@@ -53,6 +63,7 @@ class PerformanceForm(FlaskForm):
 
 
 class OctaveDebugForm(FlaskForm):
+    model_path = StringField('Model Path', default=MODEL_PATH)
     image = FileField(validators=[FileAllowed(photos, 'Image Only'),
                                   FileRequired('File was empty')])
     submit = SubmitField()
@@ -148,68 +159,65 @@ def perf():
 def comp():
     return render_template('index.html')
 
-
-def ssh_run_cmd(cmd):
-    client = paramiko.SSHClient()
-    client.load_system_host_keys()
-    client.set_missing_host_key_policy(paramiko.WarningPolicy)
-    client.connect('hydra2.visenze.com', username='khoa', password='KimTho1612')
-    stdin, stdout, stderr = client.exec_command(cmd)
-    client.close()
-
-
-
 @app.route('/localeval', methods=['GET', 'POST'])
 def localeval():
-    form = OctaveDebugForm()
-    if form.validate_on_submit():
-        imname = photos.save(form.image.data)
+    octform = OctaveDebugForm()
+    if octform.validate_on_submit():
+
+        # I am lazy
+        # for f in glob.glob("{}/*".format(vizdir)):
+        #     print("removing {}".format(f))
+        #     os.remove(f)
+
+        imname = photos.save(octform.image.data)
+        baseimname = osp.splitext(osp.basename(imname))[0]
+        modelpath = octform.model_path.data
         imfullpath = osp.join(imdir, imname)
-        subprocess.run(['scp', ])
-        # setup ssh
-        client = paramiko.SSHClient()
-        client.load_system_host_keys()
-        client.set_missing_host_key_policy(paramiko.WarningPolicy)
-        client.connect('hydra2.visenze.com', username='khoa', password='KimTho1612')
-        sftp = client.open_sftp()
-        sftp.put(imfullpath, '/mnt/ssd_01/khoa/python_scripts/detectron_tools/{}'.format(imname))
-        sftp.close()
-        client.close()
+        imvizdir = osp.join(vizdir, baseimname)
+        os.mkdir(imvizdir)
 
-        # run the demo on server
-        ssh_run_cmd('''cd /mnt/ssd_01/khoa/python_scripts/
-                    /mnt/ssd_01/khoa/python_scripts/detectron_tools/
+        process = Popen(["python",
+                         "/mnt/ssd_01/khoa/python_scripts/detectron_tools/debug_output_blobs.py",
+                         "-I", str(imfullpath),
+                         "-M", str(modelpath),
+                         "-O", str(imvizdir)],
+                        stdout=PIPE)
+        (output, err) = process.communicate()
+        print(output)
+        exit_code = process.wait()
 
-                    python debug_output_blobs.py -M model_final/ -I a.jpg
-                    ''')
-        # return render_template('local_eval.html', form=form, img_url=impath)
-    return render_template('local_eval.html', form=form)
+        # done, show the result
+        vizfiles = [f for f in os.listdir(imvizdir) \
+                    if osp.isfile(osp.join(imvizdir, f))]
 
-# @app.route('/form', methods=['GET', 'POST'])
-# def test_form():
-#     form = HelloForm()
-#     return render_template('form.html', form=form)
+        vizfiles = get_viz_files(vizfiles, baseimname)
+        print(vizfiles)
+        fpn_filters = sorted(list(set([f['fpn'] for f in vizfiles])))
 
 
-# @app.route('/nav', methods=['GET', 'POST'])
-# def test_nav():
-#     return render_template('nav.html')
+        return render_template('local_eval.html', form=octform,
+                               vdir=baseimname,
+                               vizs=vizfiles,
+                               fpn_filters=fpn_filters)
+    return render_template('local_eval.html', form=octform, vizs=None)
+
+def get_viz_files(vizfiles, baseimname):
+    """
+    return following list:
+        'imname': imname,
+        'fpn': fpn name,
+        'cls': predicted class
+    """
+    ret = list()
+    ll = len(baseimname)
+    for fname in vizfiles:
+        code = fname[ll+1:].split("_", 1)
+        ret.append({'imname': fname,
+                   'fpn': code[0],
+                   'cls': code[1].split(".")[0]})
+
+    return ret
 
 
-# @app.route('/pagination', methods=['GET', 'POST'])
-# def test_pagination():
-#     db.drop_all()
-#     db.create_all()
-#     for i in range(100):
-#         m = Message()
-#         db.session.add(m)
-#     db.session.commit()
-#     page = request.args.get('page', 1, type=int)
-#     pagination = Message.query.paginate(page, per_page=10)
-#     messages = pagination.items
-    # return render_template('pagination.html', pagination=pagination, messages=messages)
-
-
-# @app.route('/utils', methods=['GET', 'POST'])
-# def test_utils():
-#     return render_template('utils.html')
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port='3456')
