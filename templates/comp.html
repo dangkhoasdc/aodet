@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from 'bootstrap/form.html' import render_form, render_field, render_form_row %}
+
+{% block content %}
+
+<h1> Placeholder </h1>
+
+<p>Congrats! You have found an easter egg in this demo. I wonder why you want to
+click on this link. I deliberately did not show anything in this feature.</p>
+<p>To compensate the lack of features, let me share an idea, which I think very
+interesting.</p>
+
+<p>A long time ago, I found a data structure named Zero-suppressed decision
+diagram(<a href="https://en.wikipedia.org/wiki/Zero-suppressed_decision_diagram"
+           target="_blank">Wiki</a>). It is an improvement of BDD - binary decision diagram. You may wonder
+what the hell this is. But did you know that Knuth mentioned ZDD is the most
+fascinated data structure in his recent memory? Yes, it is from the father
+of analysis of algorithm. It must be a big deal (<a href="https://youtu.be/xLBvCB2kr4Q?t=312"
+                                                    target="_blank">Source</a>).</p>
+
+<p>Now, ZDD or BDD is a way to represent a set or a family of set, that covers
+many computer science problems, especially in discrete constrained problems,
+namely searching, optimization and representation.</p>
+
+<p>Imagine that you are able to represent a feature representation by a binary
+string (image hashing) and then apply ZDD/BDD to that representation.
+Eventually, you are able to retrieve, search, optimize directly on ZDD/BDD
+without decompression and in compact structure. How cool is that? </p>
+
+<br/>
+{% endblock %}

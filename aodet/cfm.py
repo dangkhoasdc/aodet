@@ -155,7 +155,7 @@ class DetectionConfusionMatrix(ConfusionMatrix):
     the column corresponding to the detected class) (*NO_GROUNDTRUTH_SPEC*).
     """
     def __init__(self, classes):
-        super().__init__(classes)
+        super(DetectionConfusionMatrix, self).__init__(classes)
 
         self.no_matches = {cls: 0 for cls in self.classes}
         self.duplicates = {cls: 0 for cls in self.classes}

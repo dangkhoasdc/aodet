@@ -86,6 +86,21 @@
 {
     margin-bottom: 1px;
 }
+
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
 </style>
 <div class="spinner-loading" style="display: none;">
     <div class="spinner"></div>
@@ -116,6 +131,16 @@
         {{ render_field(form.model_path, form_type="horizontal") }}
         {{ render_field(form.image, form_type="horizontal") }}
         {{ render_field(form.submit_oct, onclick="loading();") }}
+    </form>
+
+
+<h1> Exp Comparisons </h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {{ expform.csrf_token }}
+        {{ render_field(expform.category, form_type="horizontal") }}
+        {{ render_field(expform.exps, form_type="horizontal") }}
+        {{ render_field(expform.submit_exp, onclick="loading();") }}
     </form>
 
 
@@ -158,6 +183,10 @@
 </div>
 {% endif %}
 
+<div class="container" id="roc">
+</div>
+
+<script src="https://d3js.org/d3.v3.min.js"></script>
 <script type="text/javascript">
 function loading(){
     $(".spinner-loading").eq(0).show();
@@ -203,5 +232,154 @@ function RndText() {
   document.getElementById('showtext').innerHTML=textarray[rannum];
 }
 onload = function() { RndText(); }
+
+// drawing pr curve
+{% if compexp  %}
+var margin = {top: 20, right: 80, bottom: 30, left: 50},
+    width = 600 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var x = d3.scale.linear().range([0, width]);
+var y = d3.scale.linear().range([height, 0]);
+
+x.domain([0.0, 1.0]);
+y.domain([0.0, 1.0]);
+
+
+var color = d3.scale.category10();
+var xAxis = d3.svg.axis().scale(x).orient("bottom");
+var yAxis = d3.svg.axis().scale(y).orient("left");
+
+var line = d3.svg.line()
+    .interpolate("basis")
+    .x(function(d) { return x(d.recall); })
+    .y(function(d) { return y(d.precision); });
+
+var svg = d3.select("#roc").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+var data = {{ compexp | safe }};
+var temp= {{ expnames | safe }};//cities to be shown
+var filterData= {};//cities to be shown
+for (i = 0; i < temp.length; ++i) {
+    filterData[temp[i]] = true;
+}
+
+function drawChart(filterData) {
+  color.domain(Object.keys(filterData));
+
+    var prs = color.domain().map(function(name) {
+        return {
+            name: name,
+            values: data.filter(function(d) {
+                return d[0] == name;
+            }).map(function(d) {
+                return {precision: d[2], recall: d[1]};
+            })
+        };
+    });
+
+
+  svg.selectAll("*").remove();
+  //LEGEND
+  var legend = svg.selectAll('g')
+      .data(prs)
+      .enter()
+      .append('g')
+      .attr('class', 'legend');
+
+  legend.append('rect')
+      .attr('x', width - 20)
+      .attr('y', function(d, i){ return i *  20;})
+      .attr('width', 10)
+      .attr('height', 10)
+      .style('fill', function(d) {
+        return color(d.name);
+      });
+
+
+  legend.append('text')
+      .attr('x', width - 8)
+      .attr('y', function(d, i){ return (i *  20) + 9;})
+      .text(function(d){ return d.name; });
+
+  legend.on("click",function(d){
+  		reDraw(d.name);
+    });
+
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("x", width)
+      .attr("y", -6)
+      .style("text-anchor", "end")
+      .text("Recall");
+
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+      .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Precision");
+
+  var boo=prs.filter(function(d){return filterData[d.name]==true ;});
+
+
+  var city = svg.selectAll(".city")
+      .data(prs.filter(function(d){return filterData[d.name]==true;}))
+      .enter().append("g");
+
+  console.log(city);
+
+  svg.selectAll(".city")
+        .data(prs.filter(function(d){return filterData[d.name]==true;}))
+        .append("g")
+        .attr("class", "city");
+
+  svg.selectAll(".city")
+      .data(prs.filter(function(d){return filterData[d.name]==true;}))
+      .exit()
+      .remove();
+
+  city.append("path")
+      .attr("class", "line")
+      .attr("d", function(d) { return line(d.values); })
+      .style("stroke", function(d) { return color(d.name); });
+
+//  city.append("text")
+//      .datum(function(d) { return {name: d.name, value: d.values[d.values.length - 1]}; })
+//      .attr("transform", function(d) { return "translate(" + x(d.value.date) + "," + y(d.value.temperature) + ")"; })
+//      .attr("x", 3)
+//      .attr("dy", ".35em")
+//      .text(function(d) { return d.name; });
+
+    svg.selectAll(".city")
+      .data(prs.filter(function(d){return filterData[d.name]==true;}))
+      .exit()
+      .remove();
+}
+
+console.log(filterData);
+drawChart(filterData);
+function reDraw(name){
+
+	filterData[name]=!filterData[name];
+	console.log("redraw :");
+	console.log(filterData);
+	drawChart(filterData);
+}
+
+{% endif %}
 </script>
 {% endblock %}

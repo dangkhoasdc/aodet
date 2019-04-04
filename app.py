@@ -11,12 +11,14 @@ import os.path as osp
 from subprocess import Popen, PIPE, list2cmdline
 import glob
 
+import numpy as np
+
 # flask
 from flask import Flask, render_template, request
 from flask.json import jsonify
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, FieldList, FormField
 from wtforms.validators import DataRequired, Length
 from flask_uploads import UploadSet, configure_uploads, IMAGES, patch_request_class
 from flask_wtf.file import FileField, FileRequired, FileAllowed
@@ -78,6 +80,16 @@ class TSNEForm(FlaskForm):
     categories = StringField('Category (All if empty)')
     submit_tsne = SubmitField("Run T-SNE")
 
+
+class ExpJsonForm(FlaskForm):
+    expjson = FileField('Exp Json')
+    expname = StringField('Exp Name')
+
+class ExpJsonListForm(FlaskForm):
+    category = StringField('Category', validators=[DataRequired()])
+    exps = FieldList(FormField(ExpJsonForm), min_entries=3)
+    submit_exp = SubmitField('Run Comparisons')
+
 #########################################################
 # ROUTE Handlers
 #########################################################
@@ -123,12 +135,44 @@ def index():
 
 @app.route('/comp', methods=['GET', 'POST'])
 def comp():
-    return render_template('index.html')
+    return render_template('comp.html')
 
 @app.route('/localeval', methods=['GET', 'POST'])
 def localeval():
     octform = OctaveDebugForm()
     tsne_form = TSNEForm()
+    exp_form = ExpJsonListForm()
+
+    if exp_form.submit_exp.data and exp_form.validate():
+        cat = exp_form.category.data
+        data = []
+        expnames = []
+        for idx, d in enumerate(exp_form.exps.data):
+            expidx = 'exps-{}-expjson'.format(idx)
+            if d['expname'] is None or request.files.get(expidx) is None:
+                continue
+
+            jsondata = json.loads(
+                request.files.get(expidx).read()
+            )
+            name = str(d['expname'])
+            expnames.append(name)
+            pr = find_pr_values(jsondata, cat)
+            # precision = np.maximum.accumulate(pr['precision'][::-1])[::-1].tolist()
+            precision = pr['precision']
+            recall = pr['recall']
+
+            for p, r in zip(precision, recall):
+                data.append([name, r, p])
+
+        return render_template('local_eval.html', form=octform,
+                               tsneform=tsne_form,
+                               expform = exp_form,
+                               expnames=expnames,
+                               compexp=data,
+                               cat=cat)
+
+
     if tsne_form.submit_tsne.data and tsne_form.validate():
         dsname = tsne_form.dataset.data
         cats = list(map(lambda s: s.strip(), tsne_form.categories.data.split(",")))
@@ -136,7 +180,8 @@ def localeval():
         html_viz = "http://hydra2.visenze.com:4567/{}".format(osp.basename(html_viz))
         return render_template('local_eval.html', form=octform,
                                tsneform=tsne_form,
-                               tsne_viz=html_viz)
+                               tsne_viz=html_viz,
+                               expform = exp_form)
 
     if octform.submit_oct.data and octform.validate():
 
@@ -175,8 +220,15 @@ def localeval():
                                vdir=baseimname,
                                vizs=vizfiles,
                                fpn_filters=fpn_filters,
-                               tsneform=tsne_form)
-    return render_template('local_eval.html', form=octform, tsneform=tsne_form, vizs=None)
+                               tsneform=tsne_form,
+                               expform=exp_form)
+    return render_template('local_eval.html', form=octform,
+                           tsneform=tsne_form,
+                           expform=exp_form,
+                           vizs=None,
+                           compexp=None,
+                           expnames=None,
+                           cat=None)
 
 #########################################################
 # Backend stuff
@@ -279,8 +331,50 @@ def get_suggestion(anadet):
         retsug[lbl] = v
     return retsug, confusing_cls
 
-    # return json.dumps([targets, cfm])
-# jsonify(targets=targets, cfm=cfm)
+def find_pr_values(jsondata, cat):
+    """
+    Find Precision-Recall values of `cat` category in the json data
+    :param: jsondata (Dict): json data structure
+    :param: cat (str): category
+    :return: precision (list of float)
+    :return: recall (list of float)
+    """
+    # only get PR values
+    data = jsondata['precision_recall_curve']
+    catid = None
+    for plugin in data['plugins']:
 
+        if 'labels' not in plugin.keys():
+            continue
+        if (plugin['labels'][0] == cat) \
+                or (cat == "average" and len(plugin['labels']) > 1):
+            catid = plugin['id']
+            break
+
+    assert catid is not None, \
+        "could not find axis id of {}".format(catid)
+
+    # use catid to find core data id
+
+    dataid = None
+    if catid[-3:] == "pts":
+        catid = catid[:-3]
+
+    for line in data['axes'][0]['lines']:
+        if line['id'] == catid:
+            dataid = line['data']
+            break
+
+    assert dataid is not None, \
+        "could not find dataid from {}".format(catid)
+
+    precision = []
+    recall = []
+    prdata = data['data'][dataid]
+    for pts in prdata:
+        recall.append(pts[0])
+        precision.append(pts[1])
+
+    return {'precision': precision, 'recall': recall}
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port='3456')
