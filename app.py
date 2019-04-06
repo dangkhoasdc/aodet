@@ -10,6 +10,8 @@ import json
 import os.path as osp
 from subprocess import Popen, PIPE, list2cmdline
 import glob
+import cPickle as pkl
+from collections import defaultdict
 
 import numpy as np
 
@@ -176,12 +178,13 @@ def localeval():
     if tsne_form.submit_tsne.data and tsne_form.validate():
         dsname = tsne_form.dataset.data
         cats = list(map(lambda s: s.strip(), tsne_form.categories.data.split(",")))
-        html_viz = run_tsne_viz(dsname, cats)
+        html_viz, sos = run_tsne_viz(dsname, cats)
         html_viz = "http://hydra2.visenze.com:4567/{}".format(osp.basename(html_viz))
         return render_template('local_eval.html', form=octform,
                                tsneform=tsne_form,
                                tsne_viz=html_viz,
-                               expform = exp_form)
+                               sos=sos,
+                               expform=exp_form)
 
     if octform.submit_oct.data and octform.validate():
 
@@ -256,10 +259,12 @@ def run_tsne_viz(dsname, cats):
         :param dataset_name: (str) dataset name
         :param cats: (list) categories
     """
-    report_fpath = "{}_{}".format(dsname, "_".join(sorted(cats)))
+    report_fpath = "{}_{}_modified_sklearn".format(dsname, "_".join(sorted(cats)))
+    sos_fpath = "{}_{}_modified_sklearn_sos".format(dsname, "_".join(sorted(cats)))
     report_fullpath = osp.join(REPORT_DIR, report_fpath+".html")
+    sos_fullpath = osp.join(REPORT_DIR, sos_fpath+".pkl")
     print("cats = {}".format(cats))
-    if not osp.exists(report_fullpath) :
+    if not osp.exists(report_fullpath) or not osp.exists(sos_fullpath) :
         run_command([
             "python",
             "/mnt/ssd_01/khoa/python_scripts/detection_tsne.py",
@@ -269,7 +274,18 @@ def run_tsne_viz(dsname, cats):
             "-C"
         ]+list(map(str, cats)))
 
-    return report_fullpath
+    # after running, apply post-process for SOS file
+    sosdata = pkl.load(open(sos_fullpath, "rb"))
+    postsos = defaultdict(list)
+    print("type sosdata: {}".format(type(sosdata)))
+    print("len sosdata: {}".format(len(sosdata)))
+    for impath, sos, label in zip(*sosdata):
+        postsos[label].append([osp.join("http://hydra2.visenze.com:4567/", impath), sos])
+
+    for lbl in postsos:
+        postsos[lbl] = sorted(postsos[lbl], key=lambda x: x[1], reverse=True)[:50]
+
+    return report_fullpath, postsos
 
 def get_viz_files(vizfiles, baseimname):
     """
