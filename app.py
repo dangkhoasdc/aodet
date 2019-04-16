@@ -178,12 +178,13 @@ def localeval():
     if tsne_form.submit_tsne.data and tsne_form.validate():
         dsname = tsne_form.dataset.data
         cats = list(map(lambda s: s.strip(), tsne_form.categories.data.split(",")))
-        html_viz, sos = run_tsne_viz(dsname, cats)
+        html_viz, sos, subcluster = run_tsne_viz(dsname, cats)
         html_viz = "http://hydra2.visenze.com:4567/{}".format(osp.basename(html_viz))
         return render_template('local_eval.html', form=octform,
                                tsneform=tsne_form,
                                tsne_viz=html_viz,
                                sos=sos,
+                               subcluster=subcluster,
                                expform=exp_form)
 
     if octform.submit_oct.data and octform.validate():
@@ -277,15 +278,23 @@ def run_tsne_viz(dsname, cats):
     # after running, apply post-process for SOS file
     sosdata = pkl.load(open(sos_fullpath, "rb"))
     postsos = defaultdict(list)
+    subcluster = defaultdict(lambda: defaultdict(list))
     print("type sosdata: {}".format(type(sosdata)))
     print("len sosdata: {}".format(len(sosdata)))
-    for impath, sos, label in zip(*sosdata):
+    for impath, sos, lblids, label in zip(*sosdata):
         postsos[label].append([osp.join("http://hydra2.visenze.com:4567/", impath), sos])
+        subcluster[label][int(lblids)].append([osp.join("http://hydra2.visenze.com:4567/", impath), lblids])
 
     for lbl in postsos:
-        postsos[lbl] = sorted(postsos[lbl], key=lambda x: x[1], reverse=True)[:50]
+        postsos[lbl] = sorted(postsos[lbl], key=lambda x: x[1], reverse=True)[:20]
 
-    return report_fullpath, postsos
+    # filter the subcluster, remove one less than 3 samples
+    for lbl in subcluster:
+        for sublbl in subcluster[lbl]:
+            l = min(len(subcluster[lbl][sublbl]), 10)
+            subcluster[lbl][sublbl] = subcluster[lbl][sublbl][:l]
+
+    return report_fullpath, postsos, subcluster
 
 def get_viz_files(vizfiles, baseimname):
     """

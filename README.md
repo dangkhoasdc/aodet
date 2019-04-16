@@ -36,4 +36,5 @@ AoDet
  * 01/04/19: Support concept false positive/ Update demo.
  * 02/04/19: Implement heuristics/ Did some stupid thigs, turn out I knew 20
  ways to make things not worked.
- * 03/04:19: Octave Output Visualization/ T-SNE Visualization.
+ * 03/04/19: Octave Output Visualization/ T-SNE Visualization.
+ * 16/04/19: Subclusters visualization.

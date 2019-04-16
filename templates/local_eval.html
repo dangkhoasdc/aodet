@@ -11,8 +11,11 @@
   background: #fff;
 }
 /* mak images fill their container*/
+.thumb-div {
+    width 150px;
+}
 .thumb {
-  width: 300px;
+  width: 150px;
   height: auto;
 }
 
@@ -27,13 +30,13 @@
 /* Bigger than Phones(tablet) */
 @media only screen and (min-width: 750px) {
   .img-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 /* Bigger than Phones(laptop / desktop) */
 @media only screen and (min-width: 970px) {
   .img-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
@@ -159,14 +162,36 @@
 
     <div class="container-img">
         {% for lbl, images in sos.items() %}
+        <h3>{{lbl}}</h3>
         <div class="img-grid">
-            <h3>{{lbl}}</h3>
             {% for im in images %}
 
-            <img class="thumb" src="{{im[0]}}" alt="">
+            <div class="thumb-div">
+                <img class="thumb" src="{{im[0]}}" alt="">
+                <p> {{im[1]}} </p>
+            </div>
             {% endfor %}
 
         </div>
+        {% endfor %}
+
+
+
+        {% for main_lbl, sublbls in subcluster.items() %}
+        <h3>{{main_lbl}}</h3>
+            {% for slbl, images in sublbls.items() %}
+            {% if images|length > 3 %}
+            <h4>{{slbl}}</h4>
+            <div class="img-grid">
+                {% for im in images %}
+
+                <div class="thumb-div">
+                    <img class="thumb" src="{{im[0]}}" alt="">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
         {% endfor %}
 
     </div>
