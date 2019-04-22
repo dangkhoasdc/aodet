@@ -20,7 +20,7 @@ from flask import Flask, render_template, request
 from flask.json import jsonify
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, FieldList, FormField
+from wtforms import StringField, SubmitField, FieldList, FormField, SelectField
 from wtforms.validators import DataRequired, Length
 from flask_uploads import UploadSet, configure_uploads, IMAGES, patch_request_class
 from flask_wtf.file import FileField, FileRequired, FileAllowed
@@ -44,6 +44,7 @@ app.secret_key = 'dev'
 cwd = os.getcwd()
 imdir = osp.join(cwd, "static", "tmp")
 vizdir = osp.join(cwd, "static", "viz")
+embdir = osp.join(cwd, "static", "emb")
 app.config['UPLOADED_PHOTOS_DEST'] = imdir
 
 bootstrap = Bootstrap(app)
@@ -55,11 +56,17 @@ patch_request_class(app)
 # USE FOR DEMO
 
 MODEL_PATH = "/mnt/ssd_01/khoa/furniture_detection/jobdir/midlevel_v3.6/resnet50_retinanet_AR5_scale3/detectron_resnet_50_s500_lr0.0075_multistep_8_10/deploy/model_final/"
+MODEL_UNOPT_PATH = "/mnt/ssd_01/khoa/python_scripts/detectron_tools/model_final_unopt/"
 REPORT_DIR = "/mnt/ssd_01/khoa/reports/"
 
 #########################################################
 # FORM Handlers
 #########################################################
+
+T_SNE_OPTIONS = [
+    ('isolated_samples', 'Isolated Samples'),
+    ('subclusters', 'Subcluster Discovery'),
+]
 
 class PerformanceForm(FlaskForm):
     expid = StringField('Experiment ID', validators=[DataRequired(), Length(1, 20)])
@@ -80,6 +87,7 @@ class OctaveDebugForm(FlaskForm):
 class TSNEForm(FlaskForm):
     dataset = StringField('Dataset name')
     categories = StringField('Category (All if empty)')
+    tsne_options = SelectField('Discovry Mode', choices=T_SNE_OPTIONS)
     submit_tsne = SubmitField("Run T-SNE")
 
 
@@ -91,6 +99,13 @@ class ExpJsonListForm(FlaskForm):
     category = StringField('Category', validators=[DataRequired()])
     exps = FieldList(FormField(ExpJsonForm), min_entries=3)
     submit_exp = SubmitField('Run Comparisons')
+
+class EmbeddingSearchForm(FlaskForm):
+    model_path = StringField('Model Path', default=MODEL_UNOPT_PATH)
+    dataset = StringField('Dataset name')
+    image = FileField(validators=[FileAllowed(photos, 'Image Only'),
+                                  FileRequired('File was empty')])
+    submit_emb_search = SubmitField("Run Embedding Search")
 
 #########################################################
 # ROUTE Handlers
@@ -144,6 +159,7 @@ def localeval():
     octform = OctaveDebugForm()
     tsne_form = TSNEForm()
     exp_form = ExpJsonListForm()
+    emb_search_form = EmbeddingSearchForm()
 
     if exp_form.submit_exp.data and exp_form.validate():
         cat = exp_form.category.data
@@ -170,6 +186,7 @@ def localeval():
         return render_template('local_eval.html', form=octform,
                                tsneform=tsne_form,
                                expform = exp_form,
+                               embform=emb_search_form,
                                expnames=expnames,
                                compexp=data,
                                cat=cat)
@@ -180,11 +197,20 @@ def localeval():
         cats = list(map(lambda s: s.strip(), tsne_form.categories.data.split(",")))
         html_viz, sos, subcluster = run_tsne_viz(dsname, cats)
         html_viz = "http://hydra2.visenze.com:4567/{}".format(osp.basename(html_viz))
+        tsne_option = tsne_form.tsne_options.data
+        print("tsne options: {}".format(tsne_option))
+        if tsne_option == "isolated_samples":
+            subcluster = None
+        elif tsne_option == "subclusters":
+            sos = None
+        else:
+            raise IOError("could not get TSNE option.")
         return render_template('local_eval.html', form=octform,
                                tsneform=tsne_form,
                                tsne_viz=html_viz,
                                sos=sos,
                                subcluster=subcluster,
+                               embform=emb_search_form,
                                expform=exp_form)
 
     if octform.submit_oct.data and octform.validate():
@@ -225,10 +251,27 @@ def localeval():
                                vizs=vizfiles,
                                fpn_filters=fpn_filters,
                                tsneform=tsne_form,
+                               embform=emb_search_form,
                                expform=exp_form)
+
+    if emb_search_form.submit_emb_search.data and emb_search_form.validate():
+        dsname = emb_search_form.dataset.data
+        modelpath = emb_search_form.model_path.data
+        imname = photos.save(emb_search_form.image.data)
+        baseimname = osp.splitext(osp.basename(imname))[0]
+        imfullpath = osp.join(imdir, imname)
+        search_ret = run_embedding_search(modelpath, dsname, imfullpath)
+        return render_template('local_eval.html', form=octform,
+                               tsneform=tsne_form,
+                               expform=exp_form,
+                               embform=emb_search_form,
+                               search_ret=search_ret)
+
+
     return render_template('local_eval.html', form=octform,
                            tsneform=tsne_form,
                            expform=exp_form,
+                           embform=emb_search_form,
                            vizs=None,
                            compexp=None,
                            expnames=None,
@@ -296,6 +339,49 @@ def run_tsne_viz(dsname, cats):
 
     return report_fullpath, postsos, subcluster
 
+def run_embedding_search(modelpath, dsname, impath):
+    """
+    Call an external program which runs the Embedding Search and return the
+    json file results. The function gets the json file and parse to
+    corresponding format.
+    Parameters:
+        :param modelpath: (str) path to the model
+        :param dsname: (str) name of dataset
+        :param impath: (str) path to the query image
+    """
+    fname = osp.splitext(osp.basename(impath))[0]
+    output_path = "{}_{}.json".format(fname, dsname)
+    output_dir = osp.join(embdir, "{}_{}_dir".format(fname, dsname))
+
+    if not osp.exists(output_path):
+        # command example
+        # python extract_fpn_embedding.py -I lighting.jpg \
+        # --model-dir model_final_unopt/
+        # --gpu 2
+        # -O lighting_output
+        # -D midlevel_v3.7_train
+        run_command([
+            "python",
+            "/mnt/ssd_01/khoa/python_scripts/detectron_tools/extract_fpn_embedding.py",
+            "-I", impath,
+            "--model-dir", modelpath,
+            "--gpu", str(2),
+            "-O", output_dir,
+            "-D", dsname
+        ])
+
+    # load the results
+    raw = json.load(open(output_path, "r"))
+    ret = []
+    for r in raw:
+        # print(r)
+        qbox = r[0]
+        newqbox = qbox.replace("/mnt/raid_04/ssd_01/khoa/aodet","")
+        qret = r[1]
+        newqret = [[q.replace("/mnt/raid_04/ssd_01/khoa/aodet",""),d] for (q,d) in qret]
+        ret.append([newqbox, newqret])
+
+    return ret
 def get_viz_files(vizfiles, baseimname):
     """
     return following list:

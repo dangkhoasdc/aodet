@@ -19,6 +19,10 @@
   height: auto;
 }
 
+.large-thumb {
+  width: 300px;
+  height: auto;
+}
 /* CSS Grid*/
 
 .img-grid {
@@ -154,12 +158,14 @@
         {{ tsneform.csrf_token }}
         {{ render_field(tsneform.dataset, form_type="horizontal") }}
         {{ render_field(tsneform.categories, form_type="horizontal") }}
+        {{ render_field(tsneform.tsne_options, form_type="horizontal") }}
         {{ render_field(tsneform.submit_tsne, onclick="loading();") }}
     </form>
 
     {% if tsne_viz %}
     Result: <a target="_blank" href="{{tsne_viz}}"> Visualization Link </a>
 
+    {% if sos %}
     <div class="container-img">
         {% for lbl, images in sos.items() %}
         <h3>{{lbl}}</h3>
@@ -174,9 +180,12 @@
 
         </div>
         {% endfor %}
+    </div>
+    {% endif %}
 
 
-
+    {% if subcluster %}
+    <div class="container-img">
         {% for main_lbl, sublbls in subcluster.items() %}
         <h3>{{main_lbl}}</h3>
             {% for slbl, images in sublbls.items() %}
@@ -193,8 +202,8 @@
             {% endif %}
             {% endfor %}
         {% endfor %}
-
     </div>
+    {% endif %}
     {% endif %}
 </div>
 
@@ -216,6 +225,32 @@
         {{ render_field(expform.submit_exp, onclick="loading();") }}
     </form>
 
+<h1>Embedding search</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {{ embform.csrf_token }}
+        {{ render_field(embform.model_path, form_type="horizontal") }}
+        {{ render_field(embform.dataset, form_type="horizontal") }}
+        {{ render_field(embform.image, form_type="horizontal") }}
+        {{ render_field(embform.submit_emb_search, onclick="loading();") }}
+    </form>
+    {% if search_ret %}
+    <div class="container-img">
+        {% for predbox in search_ret %}
+            <h4> Prediction </h4>
+            <img class="large-thumb" src="{{predbox[0]}}" alt="">
+            <h4> Result </h4>
+            <div class="img-grid">
+                {% for refpath, refdis in predbox[1] %}
+                    <div class="thumb-div">
+                        <img class="large-thumb" src="{{refpath}}" alt="">
+                        <p>{{refdis}}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
 {% if vizs %}
 <div class="container">
